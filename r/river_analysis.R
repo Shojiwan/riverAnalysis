@@ -1,7 +1,8 @@
 
-install.packages('reshape2')
-install.packages('raster')
-install.packages('ggplot2')
+# You only need to install these once. Delete these lines after that
+# install.packages('reshape2')
+# install.packages('raster')
+# install.packages('ggplot2')
 
 library(reshape2)
 library(raster)
@@ -26,24 +27,26 @@ data <- getXsct(curt, dem, spce, span)
 # write.csv(x = xsct, file = paste0(path, 'data/xsct.csv'),
 #           row.names = F, quote = F)
 
+xsct <- data[which(data$node == 22), ]
+wse <- 148
+colX <- 'xdst'; colZ <- 'elev'
+wTop <- getTopWidth(wse, xsct, colX, colZ)
+aXsc <- getXsctArea(wse, xsct, colX, colZ)
+pWet <- getWetPerim(wse, xsct, colX, colZ)
+rHyd <- getHydrRad(wse, xsct, colX, colZ)
+dMax <- getMaxDepth(wse, xsct, colZ)
+dAvg <- getMeanDepth(wse, xsct, colX, colZ)
+
 # Plot a test cross section ----
 # windows(12, 12)
 # xsct <- data[which(data$node == 22), ]
 # xsct$xdst <- xsct$xdst - min(xsct$xdst)
-# # ggplot(data = xsct, aes(x = xdst, y = elev)) + geom_point() + theme_bw() +
-# #   geom_line(color = 'brown')
+# ggplot(data = xsct, aes(x = xdst, y = elev)) + geom_point() + theme_bw() +
+#   geom_line(color = 'brown')
 # # Plot water surface
 # wse <- 146.5
-# wse <- createWSE(xsct = xsct, wse = wse, colX = 'xdst', colZ = 'elev')
+# wse <- createWSE(wse, xsct, colX, colZ)
 # ggplot(data = xsct, aes(x = xdst, y = elev)) + geom_point() + theme_bw() +
 #   geom_line(color = 'brown') + geom_line(data = wse, color = 'blue')
 # Plot a test cross section ----
-
-# Calculate hydraulic geometry and other features
-# getTopWidth
-# getXsctArea
-# getWetPerim
-# getHydrRad
-# getManningsN
-# depth_solver
 

@@ -81,7 +81,7 @@ getXsct <- function(curt, dem, spce, span) {
 }
 
 # Creates water surface points for plotting
-createWSE <- function(xsct, wse, colX, colZ) {
+createWSE <- function(wse, xsct, colX, colZ) {
   xCol <- which(names(xsct) == colX)
   zCol <- which(names(xsct) == colZ)
   surf <- interpBanks(xsct, wse, colX, colZ)
@@ -100,7 +100,7 @@ createWSE <- function(xsct, wse, colX, colZ) {
 
 # Takes arguments of water surface elevation and cross section and returns
 # the same xsct DF, with added rows with a right/left banks (and a 'type' column)
-interpBanks  <- function(xsct = NULL, wse = NULL, colX = NULL, colZ = NULL) {
+interpBanks <- function(wse, xsct, colX, colZ) {
   xCol <- which(names(xsct) == colX); zCol = which(names(xsct) == colZ)
   if (all(wse <= xsct[, zCol])) return(NULL)
   xsct$near <- xsct[, zCol] - wse
@@ -141,6 +141,125 @@ interpBanks  <- function(xsct = NULL, wse = NULL, colX = NULL, colZ = NULL) {
   xsct <- xsct[order(xsct[, xCol]), -which(names(xsct) == 'near')]
   return(xsct)
 }
+
+# For these functions we assume we pass the water surface elevation and cross
+# sections (maybe flow) and these functions will calculate those values based
+# on interim values derived from the previous two functions.
+getTopWidth <- function(wse, xsct, colX, colZ) {
+  # Interpolate banks
+  xsct <- interpBanks(xsct = xsct, wse = wse, colX = colX, colZ = colZ)
+  xCol <- which(names(xsct) == colX); zCol <- which(names(xsct) == colZ)
+  # Count the number of inundated sections and sum their lengths
+  bnks <- which(substr(xsct$type, 1, 2) %in% c('LB', 'RB'))
+  for (n in 1 : (length(bnks) / 2)) {
+    tmpW <- xsct[bnks[(n - 1) * 2 + 2], xCol] - xsct[bnks[(n - 1) * 2 + 1], xCol]
+    if (n == 1) {wdth <- tmpW} else {wdth <- wdth + tmpW}
+  }
+  return(wdth)
+}
+
+getXsctArea <- function(wse, xsct, colX, colZ) {
+  # Interpolate banks and cull ground above wse
+  xsct <- interpBanks(xsct = xsct, wse = wse, colX = colX, colZ = colZ)
+  xCol <- which(names(xsct) == colX); zCol = which(names(xsct) == colZ)
+  xsct <- xsct[which(xsct[, zCol] <= wse), ]
+  xsct$dpth_m <- max(xsct[, zCol]) - xsct[, zCol] # Max depth
+  xsct$dpth_A <- 0                                # Average depth
+  xsct$lgth <- 0                                  # Section length
+  for (n in 2 : nrow(xsct)) {
+    xsct$dpth_A[n] <- mean(c(xsct$dpth_m[n], xsct$dpth_m[n - 1]))
+    xsct$lgth[n]   <- xsct[n, xCol] - xsct[n - 1, xCol]
+  }
+  area <- sum(xsct$dpth_A * xsct$lgth)
+  return(area)
+}
+
+getWetPerim <- function(wse, xsct, colX, colZ) {
+  # Interpolate banks and cull ground above wse
+  xsct <- interpBanks(xsct = xsct, wse = wse, colX = colX, colZ = colZ)
+  xCol <- which(names(xsct) == colX); zCol = which(names(xsct) == colZ)
+  xsct <- xsct[which(xsct[zCol] <= wse), ]
+  # Count and process the number of inundated sections
+  nsct <- length(which(substr(xsct$type, 1, 2) == 'RB'))
+  for (i in 1 : nsct) {
+    indx <- (which(xsct$type == paste0('LB', ifelse(i < 10, '0', ''), i)) :
+               which(xsct$type == paste0('RB', ifelse(i < 10, '0', ''), i)))
+    wTmp <- calcDist(x = xsct[indx, xCol], y = xsct[indx, zCol])
+    if (i == 1) {pWet <- wTmp} else {pWet <- pWet + wTmp}
+  }
+  return(pWet)
+}
+
+getHydrRad  <- function(wse, xsct, colX, colZ) {
+  # X-sect area of the flow channel to the length of the wetted perimeter
+  # Interpolate banks and cull ground above wse
+  # This gets tricky. tmpX is the modified DF truncated to the banks
+  tmpX <- interpBanks(xsct = xsct, wse = wse, colX = colX, colZ = colZ)
+  xCol <- which(names(xsct) == colX); zCol = which(names(xsct) == colZ)
+  tmpX <- tmpX[which(tmpX[, zCol] <= wse), ]
+  pWet <- getWetPerim(xsct = xsct, wse = wse, colX = colX, colZ = colZ)
+  aXsc <- getXsctArea(xsct = xsct, wse = wse, colX = colX, colZ = colZ)
+  rHyd <- aXsc / pWet
+  return(rHyd)
+}
+
+getMaxDepth <- function(wse, xsct, colZ) {
+  dMax <- wse - min(xsct[, which(names(xsct) == colZ)], na.rm = T)
+  return(dMax)
+}
+
+getMeanDepth <- function(wse, xsct, colX, colZ) {
+  xCol <- which(names(xsct) == colX)
+  zCol <- which(names(xsct) == colZ)
+  tmpX <- interpBanks(wse, xsct, colX, colZ)
+  tmpX <- tmpX[which(tmpX[, zCol] <= wse), ]
+  tmpX <- tmpX[which(tmpX$type == 'GRND'), ]
+  dAvg <- mean(wse - tmpX[, zCol])
+  return(dAvg)
+}
+
+calcDist     <- function(x, y) {
+  if (length(x) != length(y)) cat('Please provide pairwise x-y data of equal length')
+  sum <- 0
+  for (i in 2 : length(x)) {
+    sum <- sum + sqrt((x[i] - x[i - 1])^2 + (y[i] - y[i - 1])^2)
+  }
+  return(sum)
+}
+
+# getManningsN <- function(wse, xsct, colX, colZ,
+#                          q = NULL, S = NULL) {
+#   # Q = V x A = 1 / n x A x R^(2/3) x S^(1/2) ==> n = 1 / Q x A x R^(2/3) x S^(1/2)
+#   area <- getXsctArea(wse = wse, xsct = xsct, colX = colX, colZ = colZ)
+#   rHyd <- getHydrRad(wse = wse, xsct = xsct, colX = colX, colZ = colZ)
+#   n    <- (1 / q) * area * rHyd^(2/3) * sqrt(S)
+#   return(n)
+# }
+# 
+# 
+# depth_solver <- function(Q = NULL, n = 0.03, S = 0.001, xsct = NULL,
+#                          colX = NULL, colZ = NULL, tolr = 0.001) {
+#   # takes cross section, known flow, Mannings n and longitudinal slope and
+#   # returns the depth of water for those conditions
+#   # Q = n^-1 * A * R^(2/3) * S^0.5 ===> A^(5/3) / P^(2/3) = n * Q / sqrt(S)
+#   RHS  <- n * Q / sqrt(S)
+#   xCol = which(names(xsct) == colX); zCol <- which(names(xsct) == colZ)
+#   zMin <- min(xsct[, zCol], na.rm = T); zMax <- max(xsct[, zCol], na.rm = T)
+#   # Half of the xsct max depth
+#   dpth <- (zMax - zMin) / 2 # Starting depth (this will change throughout)
+#   dDlt <- (zMax - zMin) / 4 # Starting adjustment interval (will change too)
+#   repeat {
+#     # Calculate area and wetted perimeter
+#     wse  <- dpth + zMin
+#     area <- getXsctArea(wse = wse, xsct = xsct, colX = colX, colZ = colZ)
+#     pWet <- getWetPerim(wse = wse, xsct = xsct, colX = colX, colZ = colZ)
+#     LHS  <- area^(5/3) / pWet^(2/3)
+#     if (abs(LHS - RHS) < tolr) break
+#     if (LHS > RHS) {dpth <- dpth - dDlt} else {dpth <- dpth + dDlt}
+#     dDlt <- dDlt / 2
+#   }
+#   return(dpth)
+# }
 
 
 
