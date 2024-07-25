@@ -1,5 +1,5 @@
 # Returns a vector of unit distances orthogonal to segment angle 
-orthog       <- function(angl) { # Angle is in degrees
+orthog <- function(angl) { # Angle is in degrees
   if (angl >= 360) {
     rots <- as.integer(angl / 360) # number of times around
     angl <- angl - 360 * rots
@@ -79,4 +79,68 @@ getXsct <- function(curt, dem, spce, span) {
   xsct <- xsct[complete.cases(xsct$elev), ]
   return(xsct)
 }
+
+# Creates water surface points for plotting
+createWSE <- function(xsct, wse, colX, colZ) {
+  xCol <- which(names(xsct) == colX)
+  zCol <- which(names(xsct) == colZ)
+  surf <- interpBanks(xsct, wse, colX, colZ)
+  surf <- surf[which(is.na(surf$node)), ]
+  naxs <- surf[1, ]
+  naxs[, zCol] <- NA
+  if (nrow(surf) > 2) {
+    nbrk <- nrow(surf) / 2 - 1 # Number of section breaks
+    for (n in 1 : nbrk) {
+      naxs[, xCol]   <- mean(c(surf[2 * n, xCol], surf[2 * n + 1, xCol]))
+      surf <- rbind(surf, naxs)
+    }
+  }
+  return(surf)
+}
+
+# Takes arguments of water surface elevation and cross section and returns
+# the same xsct DF, with added rows with a right/left banks (and a 'type' column)
+interpBanks  <- function(xsct = NULL, wse = NULL, colX = NULL, colZ = NULL) {
+  xCol <- which(names(xsct) == colX); zCol = which(names(xsct) == colZ)
+  if (all(wse <= xsct[, zCol])) return(NULL)
+  xsct$near <- xsct[, zCol] - wse
+  xsct$type <- 'GRND'
+  if (any(c(xsct$near[1], xsct$near[nrow(xsct)]) < 0)) {
+    cat(paste0('Error: The cross section is completely inundated; unable to ',
+               'calculate channel dimesions.'))
+    return(NULL)
+  }
+  # Go through and count the number of regions of inundation (indt)
+  cntr <- 0 # counter to tally number of instances of dry to wet/wet to dry
+  indt <- list()
+  for (i in 2 : (nrow(xsct))) {
+    if (xsct$near[i - 1] > 0 & xsct$near[i] <= 0) {         # Start of inundation
+      cntr <- cntr + 1
+      tmpI <- i
+    } else if (xsct$near[i - 1] <= 0 & xsct$near[i] <= 0) { # Inundated
+      tmpI <- append(tmpI, i) 
+    } else if (xsct$near[i - 1] <= 0 & xsct$near[i] > 0) {  # End of inundation
+      indt[[cntr]] <- tmpI
+    } 
+  }
+  # Interate through inundated sections and interpolate the bank locations
+  for (i in 1 : cntr) {
+    temp <- xsct[1 : 2, ]
+    for (j in 1 : length(temp)) temp[, j] <- NA
+    lBnk <- xsct[c(min(indt[[i]]) - 1, min(indt[[i]])), ]
+    rBnk <- xsct[c(max(indt[[i]]), max(indt[[i]]) + 1), ]
+    temp[1, xCol] <- lBnk[1, xCol] + (lBnk[2, xCol] - lBnk[1, xCol]) * 
+      (wse - lBnk[1, zCol]) / (lBnk[2, zCol] - lBnk[1, zCol])
+    temp[2, colX] <- rBnk[1, xCol] + (rBnk[2, xCol] - rBnk[1, xCol]) * 
+      (wse - rBnk[1, zCol]) / (rBnk[2, zCol] - rBnk[1, zCol])
+    temp[1, zCol] <- temp[2, zCol] <- wse
+    temp$type[1] <- paste0('LB', ifelse(cntr < 10, '0', ''), i)
+    temp$type[2] <- paste0('RB', ifelse(cntr < 10, '0', ''), i)
+    xsct <- rbind(xsct, temp)
+  }
+  xsct <- xsct[order(xsct[, xCol]), -which(names(xsct) == 'near')]
+  return(xsct)
+}
+
+
 

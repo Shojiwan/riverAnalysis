@@ -18,3 +18,26 @@ data <- getXsct(curt, dem, spce, span)
 # write.csv(x = xsct, file = paste0(path, 'data/xsct.csv'), 
 #           row.names = F, quote = F)
 
+
+# Plot a test cross section
+xsct <- data[which(data$node == 22), ]
+xsct$xdst <- xsct$xdst - min(xsct$xdst)
+# windows(12, 12)
+ggplot(data = xsct, aes(x = xdst, y = elev)) + geom_point() + theme_bw() +
+  geom_line(color = 'brown')
+# Check in GIS
+
+# Plot a test water surface
+wse <- 147.5
+wse <- createWSE(xsct = xsct, wse = wse, colX = 'xdst', colZ = 'elev')
+ggplot(data = xsct, aes(x = xdst, y = elev)) + geom_point() + theme_bw() +
+  geom_line(color = 'brown') + geom_line(data = wse, color = 'blue')
+
+# Calculate hydraulic geometry and other features
+getTopWidth
+getXsctArea
+getWetPerim
+getHydrRad
+getManningsN
+depth_solver
+
