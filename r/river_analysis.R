@@ -1,7 +1,7 @@
 
 install.packages('reshape2')
-install.packages('reshape2')
-install.packages('reshape2')
+install.packages('raster')
+install.packages('ggplot2')
 
 library(reshape2)
 library(raster)
@@ -40,10 +40,10 @@ data <- getXsct(curt, dem, spce, span)
 # Plot a test cross section ----
 
 # Calculate hydraulic geometry and other features
-getTopWidth
-getXsctArea
-getWetPerim
-getHydrRad
-getManningsN
-depth_solver
+# getTopWidth
+# getXsctArea
+# getWetPerim
+# getHydrRad
+# getManningsN
+# depth_solver
 
