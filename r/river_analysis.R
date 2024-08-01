@@ -22,26 +22,32 @@ spce <- 2                                 # Spacing between sample points
 span <- 100                               # Distance of the span on each side
 # PUT IN YOUR DATA HERE ----
 
+
 data <- getXsct(curt, dem, spce, span)
 # Output file and check in QGIS
 # write.csv(x = xsct, file = paste0(path, 'data/xsct.csv'),
 #           row.names = F, quote = F)
 
-xsct <- data[which(data$node == 22), ]
-wse <- 148
+# Run bench index and/or width/depth using wTop and dMax (from below) 
+bench_index <- xxxxx # (Riley, 1977) 
+width_depth <- yyyyy # (Wolman, 1955)
+
 colX <- 'xdst'; colZ <- 'elev'
-wTop <- getTopWidth(wse, xsct, colX, colZ)
-aXsc <- getXsctArea(wse, xsct, colX, colZ)
-pWet <- getWetPerim(wse, xsct, colX, colZ)
-rHyd <- getHydrRad(wse, xsct, colX, colZ)
-dMax <- getMaxDepth(wse, xsct, colZ)
-dAvg <- getMeanDepth(wse, xsct, colX, colZ)
+node <- unique(data$node)
+for(j in 1 : length(node)) {
+  temp <- data[which(data$node == node[j]), ]
+  for(i in 1 : length(wse)) {
+    wTop <- getTopWidth(wse[i], temp, colX, colZ)
+    aXsc <- getXsctArea(wse[i], temp, colX, colZ)
+    dMax <- getMaxDepth(wse[i], temp, colZ)
+  }
+}
 
 # Plot a test cross section ----
 # windows(12, 12)
 # xsct <- data[which(data$node == 22), ]
 # xsct$xdst <- xsct$xdst - min(xsct$xdst)
-# ggplot(data = xsct, aes(x = xdst, y = elev)) + geom_point() + theme_bw() +
+# ggplot(data = xsc1, aes(x = xdst, y = elev)) + geom_point() + theme_bw() +
 #   geom_line(color = 'brown')
 # # Plot water surface
 # wse <- 146.5
